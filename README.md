@@ -50,6 +50,11 @@ Once the virtual environment is activated, install the required Python packages:
 
    `pip install -r requirements.txt`
 
+### 4. Install FFmpeg (if not already done)
+
+If you do not have FFmpeg already installed on your system, you should download it from [here](https://www.ffmpeg.org/download.html).
+You should also edit your system environement variables if you want to skip teh "Provide FFmpeg location" step each time you perform a download. You can find a tutorial on how to do that [here](https://phoenixnap.com/kb/ffmpeg-windows).
+
 ## Usage
 
 Run the script with the following command:
