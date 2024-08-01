@@ -20,15 +20,35 @@ Ensure you have the following installed:
 
 ## Installation
 
-1. **Install dependencies:**
-   - It is recommended to create a virtual environement before installing modules.
-   - `pip install -r requirements.txt`
+To set up this project, follow these steps:
+
+### 1. Clone the Repository
+
+Clone the repository to your local machine:
+- `git clone https://github.com/PrototypeS1/YoutubePlaylistDownloader.git`
+- `cd YoutubePlaylistDownloader`
+
+### 2. Create a Virtual Environment
+
+It’s a good practice to use a virtual environment to manage project dependencies. To create and activate a virtual environment, run the following commands:
+
+**For Windows:**
+
+  - `python -m venv venv`
+  - `venv\Scripts\activate`
 
 
-2. **Install `ffmpeg`:**
+**For macOS and Linux:**
 
-   - Download and install `ffmpeg` from [ffmpeg.org](https://ffmpeg.org/download.html).
-   - Ensure `ffmpeg` is in your system's PATH or provide its path when prompted.
+  - `python3 -m venv venv`
+  - `source venv/bin/activate`
+
+
+### 3. Install Dependencies
+
+Once the virtual environment is activated, install the required Python packages:
+
+   `pip install -r requirements.txt`
 
 ## Usage
 
