@@ -25,6 +25,7 @@ To set up this project, follow these steps:
 ### 1. Clone the Repository
 
 Clone the repository to your local machine:
+
 - `git clone https://github.com/PrototypeS1/YoutubePlaylistDownloader.git`
 - `cd YoutubePlaylistDownloader`
 
@@ -34,15 +35,13 @@ It’s a good practice to use a virtual environment to manage project dependenci
 
 **For Windows:**
 
-  - `python -m venv venv`
-  - `venv\Scripts\activate`
-
+- `python -m venv venv`
+- `venv\Scripts\activate`
 
 **For macOS and Linux:**
 
-  - `python3 -m venv venv`
-  - `source venv/bin/activate`
-
+- `python3 -m venv venv`
+- `source venv/bin/activate`
 
 ### 3. Install Dependencies
 
@@ -72,10 +71,10 @@ You will be prompted to enter the following details:
 
    `python main.py`
 
-   - Format (mp3/mp4): mp4
-   - Destination Folder: C:\Users\Username\Videos
-   - FFmpeg Folder: C:\ffmpeg
-   - Playlist URL: https://www.youtube.com/playlist?list=PLxA2cHGHG
+- Format (mp3/mp4): mp4
+- Destination Folder: C:\Users\Username\Videos
+- FFmpeg Folder: C:\ffmpeg
+- Playlist URL: <https://www.youtube.com/playlist?list=PLxA2cHGHG>
 
 ## License
 
