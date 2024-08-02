@@ -56,9 +56,24 @@ You should also edit your system environement variables if you want to skip the 
 
 ## Usage
 
+**First thing first, open a terminal in the location of the cloned reposirory !**
+
+- ie. in `C:\Users\YouUserName\Documents\RepositoryName` then open a cmd terminal. (on Windows)
+
+### 1. If you want to launch the GUI web application
+
+Run the web-based app with the following command:
+
+- `streamlit run gui.py`
+
+You will be redirected to your browser and can now use the app. If not, launch your browser and follow the link: [to your localhost](http://localhost:8501).
+You're all set ! you can now use **Prototype_S1's Youtube Playlist Downloader** freely. See Examples below if you're wondering what to do next.
+
+### 2. If you want to launch the console based application (no GUI)
+
 Run the script with the following command:
 
-   `python main.py`
+- `python main.py`
 
 You will be prompted to enter the following details:
 
@@ -66,6 +81,8 @@ You will be prompted to enter the following details:
 2. **Destination Folder**: Default is the desktop. You can enter the full path to your desired folder.
 3. **FFmpeg Folder**: Default is none. If you have `ffmpeg` installed in a custom location, provide the path or press Enter to skip.
 4. **Playlist URL**: Provide the URL of the YouTube playlist you want to download.
+
+You're all set ! you can now use **Prototype_S1's Youtube Playlist Downloader** freely. See Examples below if you're wondering what to do next.
 
 ## Example
 
