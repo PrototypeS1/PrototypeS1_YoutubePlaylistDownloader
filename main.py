@@ -30,9 +30,14 @@ def get_user_input():
         destination_folder = input("Enter destination folder, default is Desktop: ").strip() or os.path.join(os.path.expanduser('~'), 'Desktop')
         ffmpeg_folder = input("Enter path to ffmpeg folder (leave blank if not applicable): ").strip()
         playlist_url = input("Enter the YouTube playlist/media URL: ").strip()
-
+        
         if not playlist_url:
             raise ValueError("You must enter a valid URL")
+        if not is_valid_youtube_url(playlist_url) or not validate_url_with_yt_dlp(playlist_url):
+            raise ValueError("The provided URL does not appear to be valid for YouTube")
+        
+        if format_choice not in ['mp3', 'mp4']:
+            raise ValueError("You must enter a valid format (either mp3 or mp4)")
         
     except KeyboardInterrupt:
         print("User Keyboard Interrupted. Exiting the program...")
