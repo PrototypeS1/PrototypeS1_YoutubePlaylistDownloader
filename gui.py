@@ -1,1 +1,2 @@
-#GUI project
+#GUI implementation of main
+#WIP
