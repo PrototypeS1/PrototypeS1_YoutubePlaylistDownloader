@@ -1,4 +1,6 @@
 import os
+import re
+import threading
 from yt_dlp import YoutubeDL
 import regex as re
 import threading
@@ -8,7 +10,6 @@ cancellation_requested = False
 download_thread = None
 
 def is_valid_youtube_url(url):
-    # Updated regex pattern to include YouTube Music URLs
     youtube_regex = (
         r'(https?://)?(www\.)?'
         r'(youtube\.com/watch\?v=|youtu\.be/|youtube\.com/playlist\?list=|music\.youtube\.com/playlist\?list=)'
@@ -19,9 +20,7 @@ def is_valid_youtube_url(url):
 def validate_url_with_yt_dlp(url):
     try:
         with YoutubeDL() as ydl:
-            # Extract information from the URL without downloading
             info = ydl.extract_info(url, download=False)
-            # Check if the URL points to a valid video, playlist, or a YouTube Music playlist
             return info is not None and ('entries' in info or 'url' in info)
     except Exception as e:
         print(f"Error validating URL with yt-dlp: {e}")
@@ -59,69 +58,50 @@ def configure_ffmpeg(ffmpeg_folder):
         os.environ['PATH'] += os.pathsep + ffmpeg_folder
 
 def cleanup(destination_folder):
-    """Clean up partially downloaded files."""
+    """Clean up .part files in the destination folder."""
     if os.path.exists(destination_folder):
         for root, dirs, files in os.walk(destination_folder, topdown=False):
             for name in files:
-                file_path = os.path.join(root, name)
-                try:
-                    os.remove(file_path)
-                except PermissionError as e:
-                    print(f"Permission denied: {file_path}. Error: {e}")
-                except Exception as e:
-                    print(f"Failed to delete {file_path}. Error: {e}")
-            for name in dirs:
-                dir_path = os.path.join(root, name)
-                try:
-                    os.rmdir(dir_path)
-                except PermissionError as e:
-                    print(f"Permission denied: {dir_path}. Error: {e}")
-                except OSError as e:
-                    print(f"Directory not empty: {dir_path}. Error: {e}")
-                except Exception as e:
-                    print(f"Failed to delete directory {dir_path}. Error: {e}")
-        try:
-            os.rmdir(destination_folder)
-        except PermissionError as e:
-            print(f"Permission denied: {destination_folder}. Error: {e}")
-        except OSError as e:
-            print(f"Directory not empty: {destination_folder}. Error: {e}")
-        except Exception as e:
-            print(f"Failed to delete directory {destination_folder}. Error: {e}")
+                if name.endswith('.part'):
+                    file_path = os.path.join(root, name)
+                    try:
+                        os.remove(file_path)
+                        print(f"Deleted temporary file: {file_path}")
+                    except PermissionError as e:
+                        print(f"Permission denied: {file_path}. Error: {e}")
+                    except Exception as e:
+                        print(f"Failed to delete {file_path}. Error: {e}")
 
+def adjust_directory_based_on_playlist(d, destination_folder):
+    if d['status'] == 'finished':
+        playlist_title = d.get('playlist_title')
+        playlist_title = re.sub(r'[\/:*?"<>|]', '', playlist_title)
+        playlist_directory = os.path.join(destination_folder, playlist_title)
+        playlist_directory = os.path.join(destination_folder, playlist_title)
+            
+            # Create the directory if it doesn't exist
+        playlist_directory = os.path.join(destination_folder, playlist_title)
+            
+            # Create the directory if it doesn't exist
+        if not os.path.exists(playlist_directory):
+            os.makedirs(playlist_directory)
+
+def logger_hook(d, destination_folder):
+    global cancellation_requested
+    if d['status'] == 'finished':
+        print(f"\nDone downloading video: {d['filename']}")
+    if cancellation_requested:
+        print("Download was cancelled.")
+        cleanup(destination_folder)
+        return
 
 def download_playlist(format_choice, destination_folder, playlist_url, progress_hook=None):
     global cancellation_requested
-
-    def adjust_directory_based_on_playlist(d):
-        if d['status'] == 'finished':
-            # Get the playlist title, default to 'Youtube Download Output' if None
-            playlist_title = d.get('playlist_title', 'Youtube Download Output')
-            
-            # Sanitize the playlist_title to remove any invalid characters for folder names
-            playlist_title = re.sub(r'[\/:*?"<>|]', '', playlist_title)
-            
-            # Define the playlist directory path
-            playlist_directory = os.path.join(destination_folder, playlist_title)
-            
-            # Create the directory if it doesn't exist
-            if not os.path.exists(playlist_directory):
-                os.makedirs(playlist_directory)
-
-
-    def logger_hook(d):
-        if d['status'] == 'finished':
-            print(f"\nDone downloading video: {d['filename']}")
-        if cancellation_requested:
-            print("Download was cancelled.")
-            cleanup(destination_folder)
-            return
-
     ydl_opts = {
         'format': 'bestaudio/best' if format_choice == 'mp3' else 'bestvideo+bestaudio/best',
         'outtmpl': os.path.join(destination_folder, '%(playlist_title)s', '%(title)s.%(ext)s'),
         'noplaylist': False,
-        'progress_hooks': [logger_hook, adjust_directory_based_on_playlist],
+        'progress_hooks': [lambda d: logger_hook(d, destination_folder), lambda d: adjust_directory_based_on_playlist(d, destination_folder)],
         'postprocessors': [{
             'key': 'FFmpegExtractAudio' if format_choice == 'mp3' else None,
             'preferredcodec': 'mp3',
