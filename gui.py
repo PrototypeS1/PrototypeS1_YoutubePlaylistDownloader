@@ -1,7 +1,7 @@
 import os
 import streamlit as st
 import yt_dlp
-from main import adjust_directory_based_on_playlist
+from main import adjust_directory_based_on_playlist, configure_postprocessors
 
 # Initialize Streamlit session state for log messages if not already done
 if 'log_messages' not in st.session_state:
@@ -45,11 +45,7 @@ def download_worker():
         'format': 'bestaudio/best' if format_choice == 'mp3' else 'bestvideo+bestaudio/best',
         'outtmpl': os.path.join(destination_folder, '%(playlist_title)s', '%(title)s.%(ext)s'),
         'progress_hooks': [progress_hook],
-        'postprocessors': [{
-            'key': 'FFmpegExtractAudio' if format_choice == 'mp3' else None,
-            'preferredcodec': 'mp3',
-            'preferredquality': '192',
-        }] if format_choice == 'mp3' else None,
+        'postprocessors': configure_postprocessors(format_choice),
     }
 
     # Download the playlist
