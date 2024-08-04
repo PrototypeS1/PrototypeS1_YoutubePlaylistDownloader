@@ -25,6 +25,16 @@ def validate_url_with_yt_dlp(url):
     except Exception as e:
         print(f"Error validating URL with yt-dlp: {e}")
         return False
+    
+def configure_postprocessors(format_choice):
+    """Configures postprocessors based on the chosen format."""
+    if format_choice == 'mp3':
+        return [{
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'mp3',
+            'preferredquality': '192',
+        }]
+    return None
 
 def get_user_input():
     print("Welcome to YouTube Playlist Downloader.\nYou can leave the program at any time by hitting Ctrl+C\nChoose your options (press enter to set default).")

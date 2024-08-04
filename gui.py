@@ -1,5 +1,4 @@
 import os
-import re
 import streamlit as st
 import yt_dlp
 from main import adjust_directory_based_on_playlist
@@ -10,12 +9,9 @@ if 'log_messages' not in st.session_state:
 
 # Define the log function
 def log(message):
-    """Appends a message to the log and updates the log display."""
+    """Appends a message to the log and updates the session state."""
     if message:
         st.session_state['log_messages'].append(message)
-        # Update the text area with the log messages
-        log_area.text_area("Download Log", "\n".join(st.session_state['log_messages']),
-                           height=300, disabled=True, key="log_area")
 
 # Define the layout
 st.title("YouTube Playlist Downloader")
@@ -27,7 +23,18 @@ ffmpeg_folder = st.text_input("Enter FFmpeg Folder (optional):")
 format_choice = st.selectbox("Choose Format", ["mp3", "mp4"], index=0)
 
 # Create a placeholder for the log text area
-log_area = st.empty()
+log_placeholder = st.empty()
+
+def update_log_area():
+    """Updates the log area with the latest log messages."""
+    log_placeholder.text_area(
+        "Download Log",
+        "\n".join(st.session_state['log_messages']),
+        height=300,  # Fixed height to simulate a console
+        max_chars=None,  # No limit to character count
+        disabled=True,  # Read-only
+        key="log_area_display"  # Unique key for the log area
+    )
 
 def download_worker():
     """Handles the download process and logs messages."""
@@ -51,7 +58,7 @@ def download_worker():
             ydl.download([playlist_url])
         log("Download completed successfully.")
     except Exception as e:
-        log(f"Download failed: {e}")
+        log(f"Download failed: {str(e)}")
 
 def progress_hook(d):
     """Handles progress updates from yt-dlp."""
@@ -60,10 +67,11 @@ def progress_hook(d):
         log(f"Downloading: {percent:.2f}%")
     elif d['status'] == 'finished':
         adjust_directory_based_on_playlist(d, destination_folder)
-        log(f"Done downloading video: {d['filename']}")
+        log(f"Done downloading video: {d.get('filename', 'Unknown Filename')}")
 
 # Start download when the button is pressed
 if st.button("Start Download"):
     download_worker()
 
-# No clear logs button is needed
+# Update the log area content after processing
+update_log_area()
