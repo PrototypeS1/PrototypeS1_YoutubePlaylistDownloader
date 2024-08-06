@@ -1,5 +1,4 @@
 import os
-import re
 from main import configure_ffmpeg, download_playlist, validate_url_with_yt_dlp, is_valid_youtube_url, cleanup
 
 def get_user_input():
