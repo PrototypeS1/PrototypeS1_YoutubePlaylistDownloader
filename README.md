@@ -18,7 +18,6 @@ Ensure you have the following installed:
 - **yt-dlp** (Python package)
 - **ffmpeg** (if you want to convert formats, ie. WebM -> MP3)
 
-
 ## Installation
 
 To set up this project, follow these steps:
