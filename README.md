@@ -16,7 +16,8 @@ Ensure you have the following installed:
 
 - **Python** (>= 3.6)
 - **yt-dlp** (Python package)
-- **ffmpeg** (if downloading MP3 or if you want to convert formats)
+- **ffmpeg** (if you want to convert formats, ie. WebM -> MP3)
+
 
 ## Installation
 
