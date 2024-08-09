@@ -33,9 +33,12 @@ def configure_ffmpeg(ffmpeg_folder):
 def cleanup_dot_part(destination_folder):
     """Clean up .part files in the destination folder."""
     if os.path.exists(destination_folder):
+        found_dot_part = False  # Flag to track if any .part files are found and deleted
+        
         for root, dirs, files in os.walk(destination_folder, topdown=False):
             for name in files:
                 if name.endswith('.part'):
+                    found_dot_part = True  # Set the flag to True if a .part file is found
                     file_path = os.path.join(root, name)
                     try:
                         os.remove(file_path)
@@ -47,9 +50,11 @@ def cleanup_dot_part(destination_folder):
                     except Exception as e:
                         print(f"Failed to delete {file_path}. Error: {e}")
                         log_to_file(f"Failed to delete {file_path}. Error: {e}")
-                else:
-                    print(f"No .part files found in {destination_folder}, cleanup was ignored")
-                    log_to_file(f"No .part files found in {destination_folder}, cleanup was ignored")
+        
+        if not found_dot_part:
+            # Log message only if no .part files were found
+            print(f"No .part files found in {destination_folder}, cleanup was ignored")
+            log_to_file(f"No .part files found in {destination_folder}, cleanup was ignored")
 
 def adjust_directory_based_on_playlist(d, destination_folder):
     if d['status'] == 'finished':
