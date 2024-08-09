@@ -31,4 +31,3 @@ To learn more about best practices for securing applications, consider reviewing
 - [National Institute of Standards and Technology (NIST) Cybersecurity Framework](https://www.nist.gov/cyberframework)
 
 We appreciate your efforts to help us improve the security of our project and thank you for your contributions to making the software safer for everyone.
-

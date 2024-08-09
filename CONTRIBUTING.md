@@ -4,11 +4,13 @@ Thank you for considering contributing to the `PrototypeS1_YoutubePlaylistDownlo
 
 ## Table of Contents
 
-- [How to Contribute](#how-to-contribute)
-- [Reporting Issues](#reporting-issues)
-- [Submitting Code](#submitting-code)
-- [Code of Conduct](#code-of-conduct)
-- [Further Reading](#further-reading)
+- [Contributing to PrototypeS1\_YoutubePlaylistDownloader](#contributing-to-prototypes1_youtubeplaylistdownloader)
+  - [Table of Contents](#table-of-contents)
+  - [How to Contribute](#how-to-contribute)
+  - [Reporting Issues](#reporting-issues)
+  - [Submitting Code](#submitting-code)
+  - [Code of Conduct](#code-of-conduct)
+  - [Further Reading](#further-reading)
 
 ## How to Contribute
 
@@ -56,4 +58,3 @@ For more information on contributing to open source projects and best practices,
 - [Open Source Guides](https://opensource.guide/)
 
 Thank you for your contributions!
-
