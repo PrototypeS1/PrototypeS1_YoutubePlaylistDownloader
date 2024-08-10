@@ -1,6 +1,6 @@
 import os
 import streamlit as st
-from main import download_playlist, postprocess_files, cleanup_log_file
+from main import download_playlist, cleanup_log_file
 
 # Initialize Streamlit session state for the log file
 if 'log_messages' not in st.session_state:
@@ -36,31 +36,21 @@ def update_log_area():
         with open(st.session_state['log_file'], 'r') as file:
             log_content = file.read()
         log_placeholder.text(log_content)
-
-def handle_postprocessing():
-    """Handles postprocessing if format_choice is mp3."""
-    if format_choice == 'mp3':
-        postprocess_files(destination_folder)
          
 def download_worker():
     """Handles the download process and logs messages."""
     log("Starting the download process...")
-
+    log(f"Chosen format: {format_choice}")
+    log(f"Destination folder: {destination_folder}")
+    log(f"Playlist URL: {url}")
+    
     try:
-        log(f"Chosen format: {format_choice}")
-        log(f"Destination folder: {destination_folder}")
-        log(f"Playlist URL: {url}")
-
         download_playlist(format_choice, destination_folder, url, log_callback=log)
-        
-        if format_choice == 'mp3':  # Postprocessing is only needed for mp3
-            handle_postprocessing()
-        log("Download and postprocessing completed successfully.")
     except Exception as e:
         log(f"Download or postprocessing failed: {str(e)}")
-    finally:
-        cleanup_log_file()
+        st.error(e)
 
 # Start download when the button is pressed
 if st.button("Start Download"):
     download_worker()
+    cleanup_log_file()

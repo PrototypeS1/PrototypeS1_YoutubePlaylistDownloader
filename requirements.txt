@@ -1,3 +1,4 @@
 yt-dlp
+pytube
 regex
 streamlit
