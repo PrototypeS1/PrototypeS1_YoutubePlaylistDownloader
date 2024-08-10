@@ -224,13 +224,18 @@ def postprocess_files(folder, target_format='mp3'):
                     if process.returncode == 0:
                         os.remove(file_path)  # Remove the original file
                         log_to_file(f"Successfully converted {file_path} to {converted_file}.")
+                        print(f"Successfully converted {file_path} to {converted_file}.")
                     else:
                         log_to_file(f"FFmpeg error for {file_path}: {process.stderr}")
+                        print(f"FFmpeg error for {file_path}: {process.stderr}")
                 
                 except Exception as e:
                     log_to_file(f"Conversion failed for {file_path}: {str(e)}")
+                    print(f"Conversion failed for {file_path}: {str(e)}")
 
     if not files_processed:
         log_to_file("No supported files found for postprocessing.")
+        print("No supported files found for postprocessing.")
     else:
         log_to_file("Postprocessing completed.")
+        print("Postprocessing completed.")
