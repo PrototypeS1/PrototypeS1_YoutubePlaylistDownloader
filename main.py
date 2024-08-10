@@ -45,10 +45,13 @@ def configure_ffmpeg(ffmpeg_folder):
 
 def cleanup_dot_part(destination_folder):
     """Clean up .part files in the destination folder."""
+    part_files_found = False  # Flag to track if any .part files are found
+
     if os.path.exists(destination_folder):
         for root, dirs, files in os.walk(destination_folder, topdown=False):
             for name in files:
                 if name.endswith('.part'):
+                    part_files_found = True  # .part file found
                     file_path = os.path.join(root, name)
                     try:
                         os.remove(file_path)
@@ -60,9 +63,11 @@ def cleanup_dot_part(destination_folder):
                     except Exception as e:
                         print(f"Failed to delete {file_path}. Error: {e}")
                         log_to_file(f"Failed to delete {file_path}. Error: {e}")
-                else:
-                    print(f"No .part files found in {destination_folder}, cleanup was ignored")
-                    log_to_file(f"No .part files found in {destination_folder}, cleanup was ignored")
+
+    if not part_files_found:
+        print(f"No .part files found in {destination_folder}, cleanup was ignored")
+        log_to_file(f"No .part files found in {destination_folder}, cleanup was ignored")
+
 
 def prepare_output_dir(destination_folder, playlist_url, log_callback):
     """Prepare the output folder for the download and target it."""
@@ -130,14 +135,6 @@ def download_playlist(format_choice, destination_folder, playlist_url, log_callb
             print(f"Successfully downloaded playlist: {playlist_url}")
             if log_callback:
                 log_callback(f"Successfully downloaded playlist: {playlist_url}")
-            if format_choice == 'mp3':
-                print("Starting postprocessing...")
-                if log_callback:
-                    log_callback("Starting postprocessing...")
-                postprocess_files(playlist_directory)
-                print("Postprocessing completed successfully.")
-                if log_callback:
-                    log_callback("Download and postprocessing completed successfully.")
         else:
             print(f"yt-dlp encountered an error: {stderr_output}")
             if log_callback:
@@ -148,6 +145,13 @@ def download_playlist(format_choice, destination_folder, playlist_url, log_callb
             log_callback(f"Failed to execute yt-dlp command: {e}")
     finally:
         cleanup_dot_part(playlist_directory)
+        print("Starting postprocessing...")
+        if log_callback:
+            log_callback("Starting postprocessing...")
+        postprocess_files(playlist_directory)
+        print("Postprocessing completed successfully.")
+        if log_callback:
+            log_callback("Download and postprocessing completed successfully.")
 
 def validate_user_input(format_choice, playlist_url):
     if not playlist_url:

@@ -86,7 +86,13 @@ You're all set ! you can now use **Prototype_S1's Youtube Playlist Downloader** 
 
 ## Example
 
-   `python main.py`
+1. **If you want to use the console app**:
+
+   `python console.py`
+
+2. **If you want to use the GUI (Work in Progress, bugs may occur)**:
+
+   `streamlit run gui.py`
 
 - Format (mp3/mp4): mp4
 - Destination Folder: C:\Users\Username\Videos
@@ -101,3 +107,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - `yt-dlp`: A command-line program to download videos from YouTube and other sites.
 - `ffmpeg`: A complete, cross-platform solution to record, convert, and stream audio and video.
+- **`pytube`**: A lightweight, Python library for downloading YouTube videos. It simplifies video and playlist downloading with Pythonic interfaces.
