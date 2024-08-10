@@ -1,6 +1,6 @@
 import os
 import streamlit as st
-from main import download_playlist
+from main import download_playlist, validate_url_with_yt_dlp, is_valid_youtube_url
 
 # Initialize Streamlit session state for the log file
 if 'log_messages' not in st.session_state:
@@ -33,6 +33,7 @@ url = st.text_input("Enter Playlist URL:", "").strip()
 destination_folder = st.text_input("Enter Destination Folder:", value=os.path.join(os.path.expanduser('~'), 'Desktop')).strip()
 ffmpeg_folder = st.text_input("Enter FFmpeg Folder (optional):", "").strip()
 format_choice = st.selectbox("Choose Format", ["mp3", "mp4"], index=0)
+browse = st.button("Browse Target Directory")
 start =  st.button("Start Download",type='primary')
 log_placeholder = st.empty()
 
@@ -50,4 +51,7 @@ def download_worker():
         st.error(e)
 
 if start:
-    download_worker()
+    if validate_url_with_yt_dlp(url) and is_valid_youtube_url(url):
+        download_worker()
+    else:
+        st.error("The URL you provided does not seems to point to a valid YouTube media...")
