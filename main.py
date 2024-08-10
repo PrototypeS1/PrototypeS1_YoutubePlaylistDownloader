@@ -4,6 +4,19 @@ import subprocess
 import re
 from yt_dlp import YoutubeDL
 
+### WIP !! ###############################################################
+from pytube import Playlist
+
+def get_playlist_title(playlist_url):
+    try:
+        playlist = Playlist(playlist_url)
+        playlist_title = playlist.title
+        return playlist_title if playlist_title else 'Unknown Playlist'
+    except Exception as e:
+        print(f"Error extracting playlist metadata: {e}")
+        return 'Unknown Playlist'
+########################################################################
+
 # Global variables
 cancellation_requested = False
 download_thread = None
@@ -32,13 +45,13 @@ def configure_ffmpeg(ffmpeg_folder):
 
 def cleanup_dot_part(destination_folder):
     """Clean up .part files in the destination folder."""
+    part_files_found = False  # Flag to track if any .part files are found
+
     if os.path.exists(destination_folder):
-        found_dot_part = False  # Flag to track if any .part files are found and deleted
-        
         for root, dirs, files in os.walk(destination_folder, topdown=False):
             for name in files:
                 if name.endswith('.part'):
-                    found_dot_part = True  # Set the flag to True if a .part file is found
+                    part_files_found = True  # .part file found
                     file_path = os.path.join(root, name)
                     try:
                         os.remove(file_path)
@@ -50,43 +63,48 @@ def cleanup_dot_part(destination_folder):
                     except Exception as e:
                         print(f"Failed to delete {file_path}. Error: {e}")
                         log_to_file(f"Failed to delete {file_path}. Error: {e}")
-        
-        if not found_dot_part:
-            # Log message only if no .part files were found
-            print(f"No .part files found in {destination_folder}, cleanup was ignored")
-            log_to_file(f"No .part files found in {destination_folder}, cleanup was ignored")
 
-def adjust_directory_based_on_playlist(d, destination_folder):
-    if d['status'] == 'finished':
-        playlist_title = d.get('playlist_title')
-        playlist_title = re.sub(r'[\/:*?"<>|]', '', playlist_title)
-        playlist_directory = os.path.join(destination_folder, playlist_title)
-        if not os.path.exists(playlist_directory):
+    if not part_files_found:
+        print(f"No .part files found in {destination_folder}, cleanup was ignored")
+        log_to_file(f"No .part files found in {destination_folder}, cleanup was ignored")
+
+
+def prepare_output_dir(destination_folder, playlist_url, log_callback):
+    """Prepare the output folder for the download and target it."""
+    try:
+        playlist_directory = os.path.join(destination_folder, get_playlist_title(playlist_url))
+        if os.path.exists(playlist_directory):
+            print(f"Traget directory: {playlist_directory}")
+            if log_callback:
+                log_callback(f"Traget directory: {playlist_directory}")
+        else:
             os.makedirs(playlist_directory)
-
-def logger_hook(d, destination_folder):
-    if not d or 'status' not in d:
-        print("Invalid data received in logger_hook.")
-        return
-    global cancellation_requested
-    if d['status'] == 'finished':
-        print(f"\nDone downloading video: {d['filename']}")
-    if cancellation_requested:
-        print("Download was cancelled.")
-        cleanup_dot_part(destination_folder)
-        return
+            print(f"Created {playlist_directory} directory and targeted it.")
+            if log_callback:
+                log_callback(f"Created {playlist_directory} directory and targeted it.")
+        return playlist_directory
+    
+    except Exception as e:
+        print(f"Error when preparing output folder : {e}")
+        if log_callback:
+            log_callback(f"Error when preparing output folder : {e}")
 
 def download_playlist(format_choice, destination_folder, playlist_url, log_callback=None):
     """Downloads the entire playlist using yt-dlp via subprocess and logs output."""
+    
     print(f"Starting download process for playlist: {playlist_url}")
+    cleanup_log_file()
     if log_callback:
         log_callback(f"Starting download process for playlist: {playlist_url}")
+
+    # Prepare output folder
+    playlist_directory = prepare_output_dir(destination_folder,playlist_url,log_callback)
 
     # Prepare yt-dlp command arguments
     ydl_args = [
         'yt-dlp',
         '--format', 'bestaudio/best' if format_choice == 'mp3' else 'bestvideo+bestaudio/best',
-        '--output', os.path.join(destination_folder, '%(playlist_title)s', '%(title)s.%(ext)s'),
+        '--output', os.path.join(destination_folder, playlist_directory, '%(title)s.%(ext)s'),
         '--no-playlist' if format_choice == 'mp3' else '',
         playlist_url
     ]
@@ -117,14 +135,6 @@ def download_playlist(format_choice, destination_folder, playlist_url, log_callb
             print(f"Successfully downloaded playlist: {playlist_url}")
             if log_callback:
                 log_callback(f"Successfully downloaded playlist: {playlist_url}")
-            if format_choice == 'mp3':
-                print("Starting postprocessing...")
-                if log_callback:
-                    log_callback("Starting postprocessing...")
-                postprocess_files(destination_folder)
-                print("Postprocessing completed successfully.")
-                if log_callback:
-                    log_callback("Postprocessing completed successfully.")
         else:
             print(f"yt-dlp encountered an error: {stderr_output}")
             if log_callback:
@@ -134,7 +144,14 @@ def download_playlist(format_choice, destination_folder, playlist_url, log_callb
         if log_callback:
             log_callback(f"Failed to execute yt-dlp command: {e}")
     finally:
-        cleanup_dot_part(destination_folder)
+        cleanup_dot_part(playlist_directory)
+        print("Starting postprocessing...")
+        if log_callback:
+            log_callback("Starting postprocessing...")
+        postprocess_files(playlist_directory)
+        print("Postprocessing completed successfully.")
+        if log_callback:
+            log_callback("Download and postprocessing completed successfully.")
 
 def validate_user_input(format_choice, playlist_url):
     if not playlist_url:
@@ -175,27 +192,50 @@ def cleanup_log_file():
     else:
         print(f"Log file {log_file} does not exist, and thus wasn't deleted.")
 
-def postprocess_files(destination_folder):
-    """Converts .webm and .m4a files to .mp3 files using ffmpeg."""
+def postprocess_files(folder, target_format='mp3'):
+    """Converts audio and video files to a specified format using ffmpeg."""
     log_to_file("Starting file postprocessing...")
-    for root, dirs, files in os.walk(destination_folder):
+    files_processed = False  # Flag to check if any files are processed
+    
+    # Supported input formats (could be extended)
+    supported_inputs = ['.webm', '.m4a']
+    
+    for root, dirs, files in os.walk(folder):
         for file in files:
-            file_path = os.path.join(root, file)
-            if file.endswith('.webm') or file.endswith('.m4a'):
-                mp3_file = os.path.splitext(file_path)[0] + '.mp3'
+            file_ext = os.path.splitext(file)[1].lower()
+            
+            if file_ext in supported_inputs:
+                files_processed = True  # Set flag when a file is found
+                file_path = os.path.join(root, file)
+                converted_file = os.path.splitext(file_path)[0] + f'.{target_format}'
+                
                 try:
-                    log_to_file(f"Converting {file_path} to {mp3_file}...")
+                    log_to_file(f"Converting {file_path} to {converted_file}...")
+                    
+                    # Prepare FFmpeg command
                     command = [
-                        "ffmpeg", "-i", file_path, "-vn", "-ar", "44100", 
-                        "-ac", "2", "-b:a", "192k", mp3_file
+                        "ffmpeg", "-i", file_path, "-vn", "-ar", "44100",
+                        "-ac", "2", "-b:a", "192k", converted_file
                     ]
+                    
+                    # Run FFmpeg command
                     process = subprocess.run(command, capture_output=True, text=True)
+                    
                     if process.returncode == 0:
                         os.remove(file_path)  # Remove the original file
-                        log_to_file(f"Successfully converted {file_path} to {mp3_file}.")
+                        log_to_file(f"Successfully converted {file_path} to {converted_file}.")
+                        print(f"Successfully converted {file_path} to {converted_file}.")
                     else:
                         log_to_file(f"FFmpeg error for {file_path}: {process.stderr}")
+                        print(f"FFmpeg error for {file_path}: {process.stderr}")
+                
                 except Exception as e:
                     log_to_file(f"Conversion failed for {file_path}: {str(e)}")
-    log_to_file("Postprocessing completed.")
-    cleanup_log_file()
+                    print(f"Conversion failed for {file_path}: {str(e)}")
+
+    if not files_processed:
+        log_to_file("No supported files found for postprocessing.")
+        print("No supported files found for postprocessing.")
+    else:
+        log_to_file("Postprocessing completed.")
+        print("Postprocessing completed.")
