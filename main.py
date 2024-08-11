@@ -3,11 +3,14 @@ import threading
 import subprocess
 import re
 from yt_dlp import YoutubeDL
-
-### WIP !! ###############################################################
 from pytube import Playlist
 
+# Global variables
+cancellation_requested = False
+download_thread = None
+
 def get_playlist_title(playlist_url):
+    """Extracts the playlist title via metadata with pytube"""
     try:
         playlist = Playlist(playlist_url)
         playlist_title = playlist.title
@@ -15,12 +18,7 @@ def get_playlist_title(playlist_url):
     except Exception as e:
         print(f"Error extracting playlist metadata: {e}")
         return 'Unknown Playlist'
-########################################################################
-
-# Global variables
-cancellation_requested = False
-download_thread = None
-
+    
 def is_valid_youtube_url(url):
     youtube_regex = (
         r'(https?://)?(www\.)?'
@@ -89,16 +87,26 @@ def prepare_output_dir(destination_folder, playlist_url, log_callback):
         if log_callback:
             log_callback(f"Error when preparing output folder : {e}")
 
-def download_playlist(format_choice, destination_folder, playlist_url, log_callback=None):
-    """Downloads the entire playlist using yt-dlp via subprocess and logs output."""
+def download_playlist(format_choice, destination_folder, media_url, log_callback=None):
+    """Downloads the entire playlist using yt-dlp via subprocess and logs output.
+    Handles the postprocessing"""
     
-    print(f"Starting download process for playlist: {playlist_url}")
+    # Cleans log file and logs the start
     cleanup_log_file()
+    print(f"Starting download process for playlist: {media_url}")
+    print("Starting the download process...")
+    print(f"Chosen format: {format_choice}")
+    print(f"Destination folder: {destination_folder}")
+    print(f"Playlist URL: {media_url}")
     if log_callback:
-        log_callback(f"Starting download process for playlist: {playlist_url}")
+        log_callback(f"Starting download process for playlist: {media_url}")
+        log_callback("Starting the download process...")
+        log_callback(f"Chosen format: {format_choice}")
+        log_callback(f"Destination folder: {destination_folder}")
+        log_callback(f"Playlist URL: {media_url}")
 
     # Prepare output folder
-    playlist_directory = prepare_output_dir(destination_folder,playlist_url,log_callback)
+    playlist_directory = prepare_output_dir(destination_folder,media_url,log_callback)
 
     # Prepare yt-dlp command arguments
     ydl_args = [
@@ -106,7 +114,7 @@ def download_playlist(format_choice, destination_folder, playlist_url, log_callb
         '--format', 'bestaudio/best' if format_choice == 'mp3' else 'bestvideo+bestaudio/best',
         '--output', os.path.join(destination_folder, playlist_directory, '%(title)s.%(ext)s'),
         '--no-playlist' if format_choice == 'mp3' else '',
-        playlist_url
+        media_url
     ]
 
     # Run yt-dlp command
@@ -132,9 +140,9 @@ def download_playlist(format_choice, destination_folder, playlist_url, log_callb
 
         process.wait()
         if process.returncode == 0:
-            print(f"Successfully downloaded playlist: {playlist_url}")
+            print(f"Successfully downloaded playlist: {media_url}")
             if log_callback:
-                log_callback(f"Successfully downloaded playlist: {playlist_url}")
+                log_callback(f"Successfully downloaded playlist: {media_url}")
         else:
             print(f"yt-dlp encountered an error: {stderr_output}")
             if log_callback:
@@ -143,33 +151,22 @@ def download_playlist(format_choice, destination_folder, playlist_url, log_callb
         print(f"Failed to execute yt-dlp command: {e}")
         if log_callback:
             log_callback(f"Failed to execute yt-dlp command: {e}")
+        os.rmdir(playlist_directory)
     finally:
         cleanup_dot_part(playlist_directory)
         print("Starting postprocessing...")
         if log_callback:
             log_callback("Starting postprocessing...")
-        postprocess_files(playlist_directory)
-        print("Postprocessing completed successfully.")
-        if log_callback:
-            log_callback("Download and postprocessing completed successfully.")
+        postprocess_files(playlist_directory, format_choice)
 
-def validate_user_input(format_choice, playlist_url):
-    if not playlist_url:
-        print("No valid URL provided. Exiting the program.")
-        return False
-    if format_choice not in ['mp3', 'mp4']:
-        print("You must enter a valid format (either mp3 or mp4).")
-        return False
-    return True
-
-def start_download(format_choice, destination_folder, ffmpeg_folder, playlist_url):
+def start_download(format_choice, destination_folder, ffmpeg_folder, media_url):
     configure_ffmpeg(ffmpeg_folder)
     if not os.path.exists(destination_folder):
         os.makedirs(destination_folder)
     global download_thread
     download_thread = threading.Thread(
         target=download_playlist, 
-        args=(format_choice, destination_folder, playlist_url)
+        args=(format_choice, destination_folder, media_url)
     )
     download_thread.start()
 
@@ -192,7 +189,7 @@ def cleanup_log_file():
     else:
         print(f"Log file {log_file} does not exist, and thus wasn't deleted.")
 
-def postprocess_files(folder, target_format='mp3'):
+def postprocess_files(folder, target_format):
     """Converts audio and video files to a specified format using ffmpeg."""
     log_to_file("Starting file postprocessing...")
     files_processed = False  # Flag to check if any files are processed
