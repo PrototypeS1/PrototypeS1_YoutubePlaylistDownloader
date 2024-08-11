@@ -154,9 +154,6 @@ def download_playlist(format_choice, destination_folder, media_url, log_callback
         os.rmdir(playlist_directory)
     finally:
         cleanup_dot_part(playlist_directory)
-        print("Starting postprocessing...")
-        if log_callback:
-            log_callback("Starting postprocessing...")
         postprocess_files(playlist_directory, format_choice)
 
 def start_download(format_choice, destination_folder, ffmpeg_folder, media_url):
@@ -190,49 +187,66 @@ def cleanup_log_file():
         print(f"Log file {log_file} does not exist, and thus wasn't deleted.")
 
 def postprocess_files(folder, target_format):
-    """Converts audio and video files to a specified format using ffmpeg."""
+    """Converts .webm files in the specified folder to the target format using ffmpeg."""
     log_to_file("Starting file postprocessing...")
-    files_processed = False  # Flag to check if any files are processed
+    print("Starting file postprocessing...")
     
-    # Supported input formats (could be extended)
-    supported_inputs = ['.webm', '.m4a']
+    files_processed = False  # Flag to check if any files are processed
     
     for root, dirs, files in os.walk(folder):
         for file in files:
-            file_ext = os.path.splitext(file)[1].lower()
+            file_path = os.path.join(root, file)
+            base_name, file_ext = os.path.splitext(file)
+            target_file = os.path.join(root, f"{base_name}.{target_format}")
+            webm_file = os.path.join(root, f"{base_name}.webm")
             
-            if file_ext in supported_inputs:
-                files_processed = True  # Set flag when a file is found
-                file_path = os.path.join(root, file)
-                converted_file = os.path.splitext(file_path)[0] + f'.{target_format}'
-                
-                try:
-                    log_to_file(f"Converting {file_path} to {converted_file}...")
-                    
-                    # Prepare FFmpeg command
-                    command = [
-                        "ffmpeg", "-i", file_path, "-vn", "-ar", "44100",
-                        "-ac", "2", "-b:a", "192k", converted_file
-                    ]
-                    
-                    # Run FFmpeg command
-                    process = subprocess.run(command, capture_output=True, text=True)
-                    
-                    if process.returncode == 0:
-                        os.remove(file_path)  # Remove the original file
-                        log_to_file(f"Successfully converted {file_path} to {converted_file}.")
-                        print(f"Successfully converted {file_path} to {converted_file}.")
-                    else:
-                        log_to_file(f"FFmpeg error for {file_path}: {process.stderr}")
-                        print(f"FFmpeg error for {file_path}: {process.stderr}")
-                
-                except Exception as e:
-                    log_to_file(f"Conversion failed for {file_path}: {str(e)}")
-                    print(f"Conversion failed for {file_path}: {str(e)}")
+            # Check if target file exists
+            if file_ext.lower() == f'.{target_format}':
+                if os.path.exists(target_file):
+                    log_to_file(f"Output file already exists, skipping conversion for {webm_file}.")
+                    print(f"Output file already exists, skipping conversion for {webm_file}.")
+                    # Check if corresponding .webm file exists and mark for removal
+                    if os.path.exists(webm_file):
+                        try:
+                            os.remove(webm_file)
+                            log_to_file(f"Removed original .webm file: {webm_file}")
+                            print(f"Removed original .webm file: {webm_file}")
+                        except Exception as e:
+                            log_to_file(f"Failed to remove .webm file {webm_file}: {str(e)}")
+                            print(f"Failed to remove .webm file {webm_file}: {str(e)}")
+                continue
+
+            # Check if file is a .webm file and needs conversion
+            elif file_ext.lower() == '.webm':
+                if not os.path.exists(target_file):
+                    try:
+                        log_to_file(f"Converting {file_path} to {target_file}...")
+                        command = [
+                            "ffmpeg", "-i", file_path, "-vn", "-ar", "44100",
+                            "-ac", "2", "-b:a", "192k", target_file
+                        ]
+                        process = subprocess.run(command, capture_output=True, text=True)
+                        
+                        # Log FFmpeg output and error
+                        log_to_file(f"FFmpeg stdout: {process.stdout}")
+                        log_to_file(f"FFmpeg stderr: {process.stderr}")
+                        
+                        if process.returncode == 0:
+                            os.remove(file_path)  # Remove the original .webm file
+                            log_to_file(f"Successfully converted {file_path} to {target_file}.")
+                            print(f"Successfully converted {file_path} to {target_file}.")
+                            files_processed = True
+                        else:
+                            log_to_file(f"FFmpeg error for {file_path}: {process.stderr}")
+                            print(f"FFmpeg error for {file_path}: {process.stderr}")
+
+                    except Exception as e:
+                        log_to_file(f"Conversion failed for {file_path}: {str(e)}")
+                        print(f"Conversion failed for {file_path}: {str(e)}")
 
     if not files_processed:
-        log_to_file("No supported files found for postprocessing.")
-        print("No supported files found for postprocessing.")
+        log_to_file("No .webm files found for postprocessing.")
+        print("No .webm files found for postprocessing.")
     else:
         log_to_file("Postprocessing completed.")
         print("Postprocessing completed.")
