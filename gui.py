@@ -1,21 +1,30 @@
 import os
 import streamlit as st
-from main import download_playlist, validate_url_with_yt_dlp, is_valid_youtube_url
+from main import download_playlist
+import tkinter as tk
+from tkinter import filedialog
 
-# Initialize Streamlit session state for the log file
+# Initialize Streamlit session state
 if 'log_messages' not in st.session_state:
     st.session_state['log_messages'] = []
-if 'log_file' not in st.session_state:
-    st.session_state['log_file'] = "shared_log.txt"
+if 'destination_folder' not in st.session_state:
+    st.session_state['destination_folder'] = os.path.join(os.path.expanduser('~'), 'Desktop')
+
+# Directory picker - tkinter Integration
+root = tk.Tk()
+root.withdraw()
+root.wm_attributes('-topmost', 1)
+
+def update_label_area(text):
+    st.session_state['destination_folder'] = text
 
 def update_log_area():
     """Updates the log area with the latest log messages from the log file."""
-    if os.path.exists(st.session_state['log_file']):
-        with open(st.session_state['log_file'], 'r') as file:
+    if os.path.exists("shared_log.txt"):
+        with open("shared_log.txt", 'r') as file:
             log_content = file.read()
         log_placeholder.text(log_content)
 
-# Define the log function
 def log(message):
     """Appends a message to the log and updates the session state."""
     if message:
@@ -29,21 +38,17 @@ def log(message):
 st.title("YouTube Playlist Downloader")
 
 # Input fields for URL and download settings
-url = st.text_input("Enter Playlist URL:", "").strip()
-destination_folder = st.text_input("Enter Destination Folder:", value=os.path.join(os.path.expanduser('~'), 'Desktop')).strip()
-ffmpeg_folder = st.text_input("Enter FFmpeg Folder (optional):", "").strip()
+url = st.text_input("Enter Playlist URL:", "")
+dir_placeholder = st.empty()
+destination_folder = dir_placeholder.text_input("Enter Destination Folder:", value=st.session_state['destination_folder'])
+ffmpeg_folder = st.text_input("Enter FFmpeg Folder (optional):", "")
 format_choice = st.selectbox("Choose Format", ["mp3", "mp4"], index=0)
-browse = st.button("Browse Target Directory")
+browse = st.button("Browse Directory")
 start =  st.button("Start Download",type='primary')
 log_placeholder = st.empty()
 
 def download_worker():
     """Handles the download process and logs messages."""
-    log("Starting the download process...")
-    log(f"Chosen format: {format_choice}")
-    log(f"Destination folder: {destination_folder}")
-    log(f"Playlist URL: {url}")
-    
     try:
         download_playlist(format_choice, destination_folder, url, log_callback=log)
     except Exception as e:
@@ -51,7 +56,13 @@ def download_worker():
         st.error(e)
 
 if start:
-    if validate_url_with_yt_dlp(url) and is_valid_youtube_url(url):
-        download_worker()
-    else:
-        st.error("The URL you provided does not seems to point to a valid YouTube media...")
+    download_worker()
+
+if browse:
+    dirname = filedialog.askdirectory(master=root)
+    if dirname:
+        destination_folder = dirname
+        update_label_area(dirname)
+        # Update the placeholder with the new directory
+        dir_placeholder.text_input("Enter Destination Folder:", value=dirname)
+        st.info(f"Targeted directory : {destination_folder}",icon="📂")

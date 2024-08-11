@@ -73,7 +73,7 @@ You're all set ! you can now use **Prototype_S1's Youtube Playlist Downloader** 
 
 Run the script with the following command:
 
-- `python main.py`
+- `python console.py`
 
 You will be prompted to enter the following details:
 
