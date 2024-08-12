@@ -3,6 +3,8 @@ import streamlit as st
 from main import download_playlist
 import tkinter as tk
 from tkinter import filedialog
+from log_template import get_log_html
+import streamlit.components.v1 as components
 
 # Initialize Streamlit session state
 if 'log_messages' not in st.session_state:
@@ -23,7 +25,10 @@ def update_log_area():
     if os.path.exists("shared_log.txt"):
         with open("shared_log.txt", 'r') as file:
             log_content = file.read()
-        log_placeholder.text(log_content)
+
+        # Generate HTML and display it in the existing placeholder
+        log_html = get_log_html(log_content)
+        log_placeholder.markdown(body=log_html, unsafe_allow_html=True)
 
 def log(message):
     """Appends a message to the log and updates the session state."""
@@ -35,17 +40,21 @@ def log(message):
         update_log_area()
 
 # Define the layout
-st.title("YouTube Playlist Downloader")
+st.title("YouTube Playlist Downloader", help="Brought to you by Prototype_S1")
 
 # Input fields for URL and download settings
 url = st.text_input("Enter Playlist URL:", "")
 dir_placeholder = st.empty()
 destination_folder = dir_placeholder.text_input("Enter Destination Folder:", value=st.session_state['destination_folder'])
-ffmpeg_folder = st.text_input("Enter FFmpeg Folder (optional):", "")
+ffmpeg_folder = st.text_input("Enter FFmpeg Folder (optional, leave blank if set up in the system PATH):", "")
 format_choice = st.selectbox("Choose Format", ["mp3", "mp4"], index=0)
 browse = st.button("Browse Directory")
-start =  st.button("Start Download",type='primary')
-log_placeholder = st.empty()
+start = st.button("Start Download", type='primary')
+progress_placeholder = st.empty()
+log_placeholder = st.empty()  # Create a placeholder for the log area
+
+# Initial update of the log area
+update_log_area()
 
 def download_worker():
     """Handles the download process and logs messages."""
@@ -63,6 +72,8 @@ if browse:
     if dirname:
         destination_folder = dirname
         update_label_area(dirname)
+        # Update the log area with the new directory context
+        update_log_area()
         # Update the placeholder with the new directory
         dir_placeholder.text_input("Enter Destination Folder:", value=dirname)
-        st.info(f"Targeted directory : {destination_folder}",icon="📂")
+        st.info(f"Targeted directory : {destination_folder}", icon="📂")
