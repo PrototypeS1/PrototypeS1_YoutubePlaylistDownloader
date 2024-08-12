@@ -1,5 +1,5 @@
 import os
-from main import configure_ffmpeg, download_playlist, validate_url_with_yt_dlp, is_valid_youtube_url, postprocess_files
+from main import download_playlist, validate_url_with_yt_dlp, is_valid_youtube_url
 
 def get_user_input():
     """Get user input from the console."""
@@ -40,37 +40,8 @@ def main():
     format_choice, destination_folder, ffmpeg_folder, playlist_url = get_user_input()
     
     if format_choice and destination_folder and playlist_url:
-        # Configure FFmpeg
-        if ffmpeg_folder:
-            print(f"Configuring FFmpeg with folder: {ffmpeg_folder}")
-            configure_ffmpeg(ffmpeg_folder)
-        
-        # Create destination folder if it does not exist
-        if not os.path.exists(destination_folder):
-            print(f"Creating destination folder: {destination_folder}")
-            os.makedirs(destination_folder)
-        
-        # Start the download process
-        print(f"Starting download to {destination_folder}...")
         try:
-            download_playlist(format_choice, destination_folder, playlist_url)
-            print("Download completed successfully.")
-            
-            # Check for downloaded files
-            files = [os.path.join(root, file) for root, dirs, files in os.walk(destination_folder) for file in files]
-            if not files:
-                print(f"No files found in destination folder: {destination_folder}")
-            else:
-                print(f"Files found in destination folder: {files}")
-                
-            # Post-process files if the format is mp3
-            if format_choice == 'mp3':
-                try:
-                    print("Starting post-processing...")
-                    postprocess_files(destination_folder)
-                    print("Post-processing completed.")
-                except Exception as e:
-                    print(f"Post-processing failed with error: {e}")
+            download_playlist(format_choice, destination_folder, playlist_url, ffmpeg_folder)
 
         except Exception as e:
             print(f"Download failed with error: {e}")

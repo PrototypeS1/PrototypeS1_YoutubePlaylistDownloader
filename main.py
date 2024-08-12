@@ -2,7 +2,6 @@ import os
 import threading
 import subprocess
 import re
-import time
 from yt_dlp import YoutubeDL
 from pytube import Playlist
 
@@ -88,10 +87,13 @@ def prepare_output_dir(destination_folder, playlist_url, log_callback):
         if log_callback:
             log_callback(f"Error when preparing output folder : {e}")
 
-def download_playlist(format_choice, destination_folder, media_url, log_callback=None):
+def download_playlist(format_choice, destination_folder, media_url, ffmpeg_folder=None, log_callback=None):
     """Downloads the entire playlist using yt-dlp via subprocess and logs output.
-    Handles the postprocessing"""
+    Handles the postprocessing, configure ffmpeg folder. Make sure all args are passed properly."""
     
+    # Check if a ffmpeg arg has been passed and configure ffmpeg folder of it is the case.
+    if ffmpeg_folder:
+        configure_ffmpeg(ffmpeg_folder)
     # Cleans log file and logs the start
     cleanup_log_file()
     print(f"Starting download process for playlist: {media_url}")
@@ -187,9 +189,10 @@ def cleanup_log_file():
     else:
         print(f"Log file {log_file} does not exist, and thus wasn't deleted.")
 
-def postprocess_files(folder, target_format, log_callback):
+def postprocess_files(folder, target_format, log_callback=None):
     """Converts .webm files in the specified folder to the target format using ffmpeg."""
-    log_callback("Starting file postprocessing...")
+    if log_callback:
+        log_callback("Starting file postprocessing...")
     print("Starting file postprocessing...")
     
     files_processed = False  # Flag to check if any files are processed
@@ -204,16 +207,19 @@ def postprocess_files(folder, target_format, log_callback):
             # Check if target file exists
             if file_ext.lower() == f'.{target_format}':
                 if os.path.exists(target_file):
-                    log_callback(f"Output file already exists, skipping conversion for {webm_file}.")
+                    if log_callback:
+                        log_callback(f"Output file already exists, skipping conversion for {webm_file}.")
                     print(f"Output file already exists, skipping conversion for {webm_file}.")
                     # Check if corresponding .webm file exists and mark for removal
                     if os.path.exists(webm_file):
                         try:
                             os.remove(webm_file)
-                            log_callback(f"Removed original .webm file: {webm_file}")
+                            if log_callback:
+                                log_callback(f"Removed original .webm file: {webm_file}")
                             print(f"Removed original .webm file: {webm_file}")
                         except Exception as e:
-                            log_callback(f"Failed to remove .webm file {webm_file}: {str(e)}")
+                            if log_callback:
+                                log_callback(f"Failed to remove .webm file {webm_file}: {str(e)}")
                             print(f"Failed to remove .webm file {webm_file}: {str(e)}")
                 continue
 
@@ -221,7 +227,9 @@ def postprocess_files(folder, target_format, log_callback):
             elif file_ext.lower() == '.webm':
                 if not os.path.exists(target_file):
                     try:
-                        log_callback(f"Converting {file_path} to {target_file}...")
+                        if log_callback:
+                            log_callback(f"Converting {file_path} to {target_file}...")
+
                         command = [
                             "ffmpeg", "-i", file_path, "-vn", "-ar", "44100",
                             "-ac", "2", "-b:a", "192k", target_file
@@ -229,25 +237,31 @@ def postprocess_files(folder, target_format, log_callback):
                         process = subprocess.run(command, capture_output=True, text=True)
                         
                         # Log FFmpeg output and error
-                        log_callback(f"FFmpeg stdout: {process.stdout}")
-                        log_callback(f"FFmpeg stderr: {process.stderr}")
+                        if log_callback:
+                            log_callback(f"FFmpeg stdout: {process.stdout}")
+                            log_callback(f"FFmpeg stderr: {process.stderr}")
                         
                         if process.returncode == 0:
                             os.remove(file_path)  # Remove the original .webm file
-                            log_callback(f"Successfully converted {file_path} to {target_file}.")
+                            if log_callback:
+                                log_callback(f"Successfully converted {file_path} to {target_file}.")
                             print(f"Successfully converted {file_path} to {target_file}.")
                             files_processed = True
                         else:
-                            log_callback(f"FFmpeg error for {file_path}: {process.stderr}")
+                            if log_callback:
+                                log_callback(f"FFmpeg error for {file_path}: {process.stderr}")
                             print(f"FFmpeg error for {file_path}: {process.stderr}")
 
                     except Exception as e:
-                        log_callback(f"Conversion failed for {file_path}: {str(e)}")
+                        if log_callback:
+                            log_callback(f"Conversion failed for {file_path}: {str(e)}")
                         print(f"Conversion failed for {file_path}: {str(e)}")
 
     if not files_processed:
-        log_callback("No .webm files found for postprocessing.\nTask Completed !")
+        if log_callback:
+            log_callback("No .webm files found for postprocessing.\nTask Completed !")
         print("No .webm files found for postprocessing.\nTask Completed !")
     else:
-        log_callback("Postprocessing completed.\nTask Completed !")
+        if log_callback:
+            log_callback("Postprocessing completed.\nTask Completed !")
         print("Postprocessing completed.\nTask Completed !")

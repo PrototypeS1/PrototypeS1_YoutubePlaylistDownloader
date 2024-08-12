@@ -50,7 +50,7 @@ log_placeholder = st.empty()
 def download_worker():
     """Handles the download process and logs messages."""
     try:
-        download_playlist(format_choice, destination_folder, url, log_callback=log)
+        download_playlist(format_choice, destination_folder, url, ffmpeg_folder, log_callback=log)
     except Exception as e:
         log(f"Download or postprocessing failed: {str(e)}")
         st.error(e)
