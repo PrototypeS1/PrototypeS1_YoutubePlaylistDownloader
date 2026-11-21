@@ -58,7 +58,6 @@ def main():
     if options is None:
         return
     format_choice, destination_folder, ffmpeg_folder, playlist_url, single = options
-    os.makedirs(destination_folder, exist_ok=True)
     download_playlist(format_choice, destination_folder, playlist_url, ffmpeg_folder, single)
 
 

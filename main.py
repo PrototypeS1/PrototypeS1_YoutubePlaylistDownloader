@@ -114,9 +114,34 @@ def get_playlist_title(url):
 # --------------------------------------------------------------------------- #
 # Download
 # --------------------------------------------------------------------------- #
+def resolve_destination(folder):
+    """Return the absolute, normalised destination folder, creating it if needed.
+
+    The destination is deliberately chosen by the local user, so any folder is
+    allowed; it is resolved once here so every later path is built from it.
+    """
+    if not folder or not str(folder).strip():
+        raise ValueError("A destination folder is required.")
+    destination = os.path.realpath(os.path.expanduser(str(folder).strip()))
+    os.makedirs(destination, exist_ok=True)
+    return destination
+
+
+def safe_join(base, name):
+    """Join name onto base, refusing any result that escapes base (e.g. '..')."""
+    base = os.path.realpath(base)
+    path = os.path.realpath(os.path.join(base, name))
+    if os.path.commonpath([base, path]) != base or path == base:
+        raise ValueError(f"Refusing to use {name!r}: it resolves outside {base}")
+    return path
+
+
 def prepare_output_dir(destination_folder, playlist_url):
-    """Create (if needed) and return the folder the playlist is downloaded into."""
-    playlist_directory = os.path.join(destination_folder, get_playlist_title(playlist_url))
+    """Create (if needed) and return the folder the playlist is downloaded into.
+
+    destination_folder must already be resolved by resolve_destination().
+    """
+    playlist_directory = safe_join(destination_folder, get_playlist_title(playlist_url))
     if os.path.isdir(playlist_directory):
         log(f"Target directory: {playlist_directory}")
     else:
@@ -143,7 +168,9 @@ def build_yt_dlp_command(format_choice, output_dir, media_url, ffmpeg_folder=Non
         command += ["--format", "bestvideo+bestaudio/best", "--merge-output-format", "mp4"]
     if ffmpeg_folder:
         command += ["--ffmpeg-location", ffmpeg_folder]
-    command.append(media_url)
+    # "--" ends option parsing, so the URL can never be read as a yt-dlp option
+    # (e.g. "--exec ..."), whatever the caller passes in.
+    command += ["--", media_url]
     return command
 
 
@@ -214,6 +241,10 @@ def download_playlist(format_choice, destination_folder, media_url, ffmpeg_folde
     """
     if format_choice not in SUPPORTED_FORMATS:
         raise ValueError(f"Unsupported format {format_choice!r}, expected one of {SUPPORTED_FORMATS}")
+    # Validate here too, not only in the front-ends: only YouTube URLs ever reach yt-dlp.
+    media_url = (media_url or "").strip()
+    if not is_valid_youtube_url(media_url):
+        raise ValueError(f"Not a YouTube video or playlist URL: {media_url!r}")
 
     cleanup_log_file()
     log("Starting the download process...\n"
@@ -225,6 +256,7 @@ def download_playlist(format_choice, destination_folder, media_url, ffmpeg_folde
     playlist_directory = None
     success = False
     try:
+        destination_folder = resolve_destination(destination_folder)
         single = resolve_single_mode(media_url, single)
         if single:
             output_dir = destination_folder

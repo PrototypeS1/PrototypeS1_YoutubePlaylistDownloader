@@ -59,7 +59,6 @@ if start:
         st.error("'Single title only' needs a video URL (watch?v=... or youtu.be/...), "
                  "not a playlist-only URL.")
     else:
-        os.makedirs(destination_folder, exist_ok=True)
         with st.spinner("Downloading... click 'Show log' to follow progress."):
             ok = download_playlist(format_choice, destination_folder, url, ffmpeg_folder or None, single)
         if ok:
