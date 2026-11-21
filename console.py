@@ -1,79 +1,65 @@
+"""Interactive console front-end. Run with: python console.py"""
+
 import os
-from main import configure_ffmpeg, download_playlist, validate_url_with_yt_dlp, is_valid_youtube_url, postprocess_files
+
+from main import (SUPPORTED_FORMATS, download_playlist, is_valid_youtube_url,
+                  parse_youtube_url, validate_url_with_yt_dlp)
+
 
 def get_user_input():
-    """Get user input from the console."""
-    print("Welcome to YouTube Playlist Downloader.\nYou can leave the program at any time by hitting Ctrl+C\nChoose your options (press enter to set default).")
-    
+    """Ask the user for the download options. Returns None if cancelled or invalid."""
+    print("Welcome to YouTube Playlist Downloader.\n"
+          "You can leave the program at any time by hitting Ctrl+C\n"
+          "Choose your options (press Enter to keep the default).")
     try:
-        format_choice = input("Enter format (mp3/mp4), default is mp3: ").strip().lower() or 'mp3'
+        format_choice = input("Enter format (mp3/mp4), default is mp3: ").strip().lower() or "mp3"
+        if format_choice not in SUPPORTED_FORMATS:
+            raise ValueError("You must enter a valid format (either mp3 or mp4)")
         print(f"You chose {format_choice}.")
-        destination_folder = input("Enter destination folder, default is Desktop: ").strip() or os.path.join(os.path.expanduser('~'), 'Desktop')
+
+        mode = input("Download the whole (p)laylist or a (s)ingle title? default is playlist: ").strip().lower() or "p"
+        if mode not in ("p", "playlist", "s", "single"):
+            raise ValueError("You must enter a valid mode (p for playlist or s for single title)")
+        single = mode.startswith("s")
+        print(f"You chose {'a single title' if single else 'the whole playlist'}.")
+
+        default_folder = os.path.join(os.path.expanduser("~"), "Desktop")
+        destination_folder = input("Enter destination folder, default is Desktop: ").strip() or default_folder
         print(f"You chose {destination_folder}.")
+
         ffmpeg_folder = input("Enter path to ffmpeg folder (leave blank if not applicable): ").strip()
-        if ffmpeg_folder == "":
-            print("You ignored the custom FFMPEG folder path, you must have installed FFMPEG in your system PATH")
-        else:
+        if ffmpeg_folder:
             print(f"You chose {ffmpeg_folder} as ffmpeg folder path.")
+        else:
+            print("No custom ffmpeg folder given, ffmpeg must be in your system PATH.")
+
         playlist_url = input("Enter the YouTube playlist/media URL: ").strip()
-        print(f"You chose {playlist_url} as the targeted playlist url.")
-        
         if not playlist_url:
             raise ValueError("You must enter a valid URL")
-        if not is_valid_youtube_url(playlist_url) or not validate_url_with_yt_dlp(playlist_url):
+        if not is_valid_youtube_url(playlist_url) or not validate_url_with_yt_dlp(playlist_url, single):
             raise ValueError("The provided URL does not appear to be valid for YouTube")
-        
-        if format_choice not in ['mp3', 'mp4']:
-            raise ValueError("You must enter a valid format (either mp3 or mp4)")
-        
+        video_id, _playlist_id = parse_youtube_url(playlist_url)
+        if single and not video_id:
+            raise ValueError("Single title mode needs a video URL (watch?v=... or youtu.be/...), "
+                             "not a playlist-only URL")
+        print(f"You chose {playlist_url} as the targeted URL.")
     except KeyboardInterrupt:
         print("\nUser Keyboard Interrupted. Exiting the program...")
-        return None, None, None, None
-
+        return None
     except ValueError as e:
         print(e)
-        return None, None, None, None
-    
-    return format_choice, destination_folder, ffmpeg_folder, playlist_url
+        return None
+
+    return format_choice, destination_folder, ffmpeg_folder or None, playlist_url, single
+
 
 def main():
-    format_choice, destination_folder, ffmpeg_folder, playlist_url = get_user_input()
-    
-    if format_choice and destination_folder and playlist_url:
-        # Configure FFmpeg
-        if ffmpeg_folder:
-            print(f"Configuring FFmpeg with folder: {ffmpeg_folder}")
-            configure_ffmpeg(ffmpeg_folder)
-        
-        # Create destination folder if it does not exist
-        if not os.path.exists(destination_folder):
-            print(f"Creating destination folder: {destination_folder}")
-            os.makedirs(destination_folder)
-        
-        # Start the download process
-        print(f"Starting download to {destination_folder}...")
-        try:
-            download_playlist(format_choice, destination_folder, playlist_url)
-            print("Download completed successfully.")
-            
-            # Check for downloaded files
-            files = [os.path.join(root, file) for root, dirs, files in os.walk(destination_folder) for file in files]
-            if not files:
-                print(f"No files found in destination folder: {destination_folder}")
-            else:
-                print(f"Files found in destination folder: {files}")
-                
-            # Post-process files if the format is mp3
-            if format_choice == 'mp3':
-                try:
-                    print("Starting post-processing...")
-                    postprocess_files(destination_folder)
-                    print("Post-processing completed.")
-                except Exception as e:
-                    print(f"Post-processing failed with error: {e}")
+    options = get_user_input()
+    if options is None:
+        return
+    format_choice, destination_folder, ffmpeg_folder, playlist_url, single = options
+    download_playlist(format_choice, destination_folder, playlist_url, ffmpeg_folder, single)
 
-        except Exception as e:
-            print(f"Download failed with error: {e}")
 
 if __name__ == "__main__":
     main()

@@ -1,0 +1,7 @@
+# Streamlit listens on every network interface by default. This app writes
+# files wherever it is told to, so only accept connections from this computer.
+[server]
+address = "localhost"
+
+[browser]
+serverAddress = "localhost"

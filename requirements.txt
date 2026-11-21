@@ -1,4 +1,2 @@
-yt-dlp
-pytube
-regex
+yt-dlp>=2026.10.26
 streamlit

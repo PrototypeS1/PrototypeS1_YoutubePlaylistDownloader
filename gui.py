@@ -1,68 +1,67 @@
+"""Streamlit front-end. Run with: streamlit run gui.py"""
+
 import os
-import streamlit as st
-from main import download_playlist
+import subprocess
+import sys
 import tkinter as tk
 from tkinter import filedialog
 
-# Initialize Streamlit session state
-if 'log_messages' not in st.session_state:
-    st.session_state['log_messages'] = []
-if 'destination_folder' not in st.session_state:
-    st.session_state['destination_folder'] = os.path.join(os.path.expanduser('~'), 'Desktop')
+import streamlit as st
 
-# Directory picker - tkinter Integration
-root = tk.Tk()
-root.withdraw()
-root.wm_attributes('-topmost', 1)
+from main import (SUPPORTED_FORMATS, cleanup_log_file, download_playlist,
+                  is_valid_youtube_url, parse_youtube_url)
 
-def update_label_area(text):
-    st.session_state['destination_folder'] = text
+LOG_VIEWER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tkinter_log_viewer.py")
 
-def update_log_area():
-    """Updates the log area with the latest log messages from the log file."""
-    if os.path.exists("shared_log.txt"):
-        with open("shared_log.txt", 'r') as file:
-            log_content = file.read()
-        log_placeholder.text(log_content)
+if "destination_folder" not in st.session_state:
+    st.session_state["destination_folder"] = os.path.join(os.path.expanduser("~"), "Desktop")
+    cleanup_log_file()
 
-def log(message):
-    """Appends a message to the log and updates the session state."""
-    if message:
-        st.session_state['log_messages'].append(message)
-        # Write to the shared log file
-        with open("shared_log.txt", "a") as f:
-            f.write(message + "\n")
-        update_log_area()
 
-# Define the layout
-st.title("YouTube Playlist Downloader")
-
-# Input fields for URL and download settings
-url = st.text_input("Enter Playlist URL:", "")
-dir_placeholder = st.empty()
-destination_folder = dir_placeholder.text_input("Enter Destination Folder:", value=st.session_state['destination_folder'])
-ffmpeg_folder = st.text_input("Enter FFmpeg Folder (optional):", "")
-format_choice = st.selectbox("Choose Format", ["mp3", "mp4"], index=0)
-browse = st.button("Browse Directory")
-start =  st.button("Start Download",type='primary')
-log_placeholder = st.empty()
-
-def download_worker():
-    """Handles the download process and logs messages."""
+def browse_directory():
+    """Open a native folder picker and store the result in the destination field."""
+    root = tk.Tk()
+    root.withdraw()
+    root.wm_attributes("-topmost", 1)
     try:
-        download_playlist(format_choice, destination_folder, url, log_callback=log)
-    except Exception as e:
-        log(f"Download or postprocessing failed: {str(e)}")
-        st.error(e)
+        dirname = filedialog.askdirectory(master=root)
+    finally:
+        root.destroy()
+    if dirname:
+        st.session_state["destination_folder"] = dirname
+
+
+def open_log_viewer():
+    """Launch the log viewer in its own process so it doesn't block Streamlit."""
+    subprocess.Popen([sys.executable, LOG_VIEWER])
+
+
+st.title("YouTube Playlist Downloader", help="Brought to you by Prototype_S1")
+
+url = st.text_input("Enter Playlist or Video URL:").strip()
+mode = st.radio("Download", ["Whole playlist", "Single title only"], horizontal=True,
+                help="'Single title only' downloads just the video in the URL, even if it is "
+                     "part of a playlist, and saves it directly in the destination folder.")
+single = mode == "Single title only"
+destination_folder = st.text_input("Enter Destination Folder:", key="destination_folder")
+ffmpeg_folder = st.text_input(
+    "Enter FFmpeg Folder (optional, leave blank if set up in the system PATH):").strip()
+format_choice = st.selectbox("Choose Format", SUPPORTED_FORMATS, index=0)
+
+st.button("Browse Directory", on_click=browse_directory)
+st.button("Show log", on_click=open_log_viewer)
+start = st.button("Start Download", type="primary")
 
 if start:
-    download_worker()
-
-if browse:
-    dirname = filedialog.askdirectory(master=root)
-    if dirname:
-        destination_folder = dirname
-        update_label_area(dirname)
-        # Update the placeholder with the new directory
-        dir_placeholder.text_input("Enter Destination Folder:", value=dirname)
-        st.info(f"Targeted directory : {destination_folder}",icon="📂")
+    if not is_valid_youtube_url(url):
+        st.error("Please enter a valid YouTube playlist or video URL.")
+    elif single and not parse_youtube_url(url)[0]:
+        st.error("'Single title only' needs a video URL (watch?v=... or youtu.be/...), "
+                 "not a playlist-only URL.")
+    else:
+        with st.spinner("Downloading... click 'Show log' to follow progress."):
+            ok = download_playlist(format_choice, destination_folder, url, ffmpeg_folder or None, single)
+        if ok:
+            st.success(f"Download finished in {destination_folder}", icon="📂")
+        else:
+            st.error("Download failed, open the log for details.")

@@ -1,238 +1,295 @@
+"""Core download logic shared by the console and GUI front-ends."""
+
 import os
-import threading
-import subprocess
 import re
+import subprocess
+import sys
+from datetime import date
+from urllib.parse import parse_qs, urlparse
+
 from yt_dlp import YoutubeDL
-from pytube import Playlist
+from yt_dlp.version import __version__ as YT_DLP_VERSION
 
-# Global variables
-cancellation_requested = False
-download_thread = None
+# YouTube changes often; yt-dlp releases older than this usually stop working.
+YT_DLP_MAX_AGE_DAYS = 90
 
-def get_playlist_title(playlist_url):
-    """Extracts the playlist title via metadata with pytube"""
-    try:
-        playlist = Playlist(playlist_url)
-        playlist_title = playlist.title
-        return playlist_title if playlist_title else 'Unknown Playlist'
-    except Exception as e:
-        print(f"Error extracting playlist metadata: {e}")
-        return 'Unknown Playlist'
-    
-def is_valid_youtube_url(url):
-    youtube_regex = (
-        r'(https?://)?(www\.)?'
-        r'(youtube\.com/watch\?v=|youtu\.be/|youtube\.com/playlist\?list=|music\.youtube\.com/playlist\?list=)'
-        r'[\w-]+'
-    )
-    return re.match(youtube_regex, url) is not None
+LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "shared_log.txt")
+SUPPORTED_FORMATS = ("mp3", "mp4")
 
-def validate_url_with_yt_dlp(url):
-    try:
-        with YoutubeDL() as ydl:
-            info = ydl.extract_info(url, download=False)
-            return info is not None and ('entries' in info or 'url' in info)
-    except Exception as e:
-        print(f"Error validating URL with yt-dlp: {e}")
-        log_to_file(f"Error validating URL with yt-dlp: {e}")
-        return False
-
-def configure_ffmpeg(ffmpeg_folder):
-    if ffmpeg_folder:
-        os.environ['PATH'] += os.pathsep + ffmpeg_folder
-
-def cleanup_dot_part(destination_folder):
-    """Clean up .part files in the destination folder."""
-    part_files_found = False  # Flag to track if any .part files are found
-
-    if os.path.exists(destination_folder):
-        for root, dirs, files in os.walk(destination_folder, topdown=False):
-            for name in files:
-                if name.endswith('.part'):
-                    part_files_found = True  # .part file found
-                    file_path = os.path.join(root, name)
-                    try:
-                        os.remove(file_path)
-                        print(f"Deleted temporary file: {file_path}")
-                        log_to_file(f"Deleted temporary file: {file_path}")
-                    except PermissionError as e:
-                        print(f"Permission denied: {file_path}. Error: {e}")
-                        log_to_file(f"Permission denied: {file_path}. Error: {e}")
-                    except Exception as e:
-                        print(f"Failed to delete {file_path}. Error: {e}")
-                        log_to_file(f"Failed to delete {file_path}. Error: {e}")
-
-    if not part_files_found:
-        print(f"No .part files found in {destination_folder}, cleanup was ignored")
-        log_to_file(f"No .part files found in {destination_folder}, cleanup was ignored")
+_YOUTUBE_HOSTS = {"youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be"}
+_YOUTUBE_ID_RE = re.compile(r"[\w-]+")
+# Characters that are not allowed in Windows file/folder names.
+_INVALID_PATH_CHARS_RE = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 
 
-def prepare_output_dir(destination_folder, playlist_url, log_callback):
-    """Prepare the output folder for the download and target it."""
-    try:
-        playlist_directory = os.path.join(destination_folder, get_playlist_title(playlist_url))
-        if os.path.exists(playlist_directory):
-            print(f"Traget directory: {playlist_directory}")
-            if log_callback:
-                log_callback(f"Traget directory: {playlist_directory}")
-        else:
-            os.makedirs(playlist_directory)
-            print(f"Created {playlist_directory} directory and targeted it.")
-            if log_callback:
-                log_callback(f"Created {playlist_directory} directory and targeted it.")
-        return playlist_directory
-    
-    except Exception as e:
-        print(f"Error when preparing output folder : {e}")
-        if log_callback:
-            log_callback(f"Error when preparing output folder : {e}")
-
-def download_playlist(format_choice, destination_folder, media_url, log_callback=None):
-    """Downloads the entire playlist using yt-dlp via subprocess and logs output.
-    Handles the postprocessing"""
-    
-    # Cleans log file and logs the start
-    cleanup_log_file()
-    print(f"Starting download process for playlist: {media_url}")
-    print("Starting the download process...")
-    print(f"Chosen format: {format_choice}")
-    print(f"Destination folder: {destination_folder}")
-    print(f"Playlist URL: {media_url}")
-    if log_callback:
-        log_callback(f"Starting download process for playlist: {media_url}")
-        log_callback("Starting the download process...")
-        log_callback(f"Chosen format: {format_choice}")
-        log_callback(f"Destination folder: {destination_folder}")
-        log_callback(f"Playlist URL: {media_url}")
-
-    # Prepare output folder
-    playlist_directory = prepare_output_dir(destination_folder,media_url,log_callback)
-
-    # Prepare yt-dlp command arguments
-    ydl_args = [
-        'yt-dlp',
-        '--format', 'bestaudio/best' if format_choice == 'mp3' else 'bestvideo+bestaudio/best',
-        '--output', os.path.join(destination_folder, playlist_directory, '%(title)s.%(ext)s'),
-        '--no-playlist' if format_choice == 'mp3' else '',
-        media_url
-    ]
-
-    # Run yt-dlp command
-    try:
-        print(f"Running yt-dlp command: {' '.join(ydl_args)}")
-        if log_callback:
-            log_callback(f"Running yt-dlp command: {' '.join(ydl_args)}")
-        process = subprocess.Popen(ydl_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-
-        # Read and log output
-        for line in iter(process.stdout.readline, ''):
-            line = line.strip()
-            if line:
-                print(line)
-                if log_callback:
-                    log_callback(line)
-        
-        stderr_output = process.stderr.read()
-        if stderr_output:
-            print(stderr_output)
-            if log_callback:
-                log_callback(stderr_output)
-
-        process.wait()
-        if process.returncode == 0:
-            print(f"Successfully downloaded playlist: {media_url}")
-            if log_callback:
-                log_callback(f"Successfully downloaded playlist: {media_url}")
-        else:
-            print(f"yt-dlp encountered an error: {stderr_output}")
-            if log_callback:
-                log_callback(f"yt-dlp encountered an error: {stderr_output}")
-    except Exception as e:
-        print(f"Failed to execute yt-dlp command: {e}")
-        if log_callback:
-            log_callback(f"Failed to execute yt-dlp command: {e}")
-        os.rmdir(playlist_directory)
-    finally:
-        cleanup_dot_part(playlist_directory)
-        print("Starting postprocessing...")
-        if log_callback:
-            log_callback("Starting postprocessing...")
-        postprocess_files(playlist_directory, format_choice)
-
-def start_download(format_choice, destination_folder, ffmpeg_folder, media_url):
-    configure_ffmpeg(ffmpeg_folder)
-    if not os.path.exists(destination_folder):
-        os.makedirs(destination_folder)
-    global download_thread
-    download_thread = threading.Thread(
-        target=download_playlist, 
-        args=(format_choice, destination_folder, media_url)
-    )
-    download_thread.start()
-
-def set_cancellation_requested(requested):
-    global cancellation_requested
-    cancellation_requested = requested
-
+# --------------------------------------------------------------------------- #
+# Logging
+# --------------------------------------------------------------------------- #
 def log_to_file(message):
-    """Appends a message to a shared log file."""
-    log_file = "shared_log.txt"
-    with open(log_file, "a") as f:
-        f.write(message + "\n")
+    """Append a message to the shared log file (read by the log viewer)."""
+    with open(LOG_FILE, "a", encoding="utf-8") as f:
+        f.write(f"{message}\n")
+
+
+def log(message):
+    """Print a message and append it to the shared log file."""
+    print(message)
+    log_to_file(message)
+
 
 def cleanup_log_file():
-    """Cleans up the shared log file after download process."""
-    log_file = "shared_log.txt"
-    if os.path.exists(log_file):
-        os.remove(log_file)
-        print(f"Log file {log_file} deleted successfully.")
-    else:
-        print(f"Log file {log_file} does not exist, and thus wasn't deleted.")
+    """Reset the shared log file, creating it if needed."""
+    with open(LOG_FILE, "w", encoding="utf-8") as f:
+        f.write("Log file empty. Waiting for download to start...\n")
 
-def postprocess_files(folder, target_format):
-    """Converts audio and video files to a specified format using ffmpeg."""
-    log_to_file("Starting file postprocessing...")
-    files_processed = False  # Flag to check if any files are processed
-    
-    # Supported input formats (could be extended)
-    supported_inputs = ['.webm', '.m4a']
-    
-    for root, dirs, files in os.walk(folder):
-        for file in files:
-            file_ext = os.path.splitext(file)[1].lower()
-            
-            if file_ext in supported_inputs:
-                files_processed = True  # Set flag when a file is found
-                file_path = os.path.join(root, file)
-                converted_file = os.path.splitext(file_path)[0] + f'.{target_format}'
-                
+
+# --------------------------------------------------------------------------- #
+# URL helpers
+# --------------------------------------------------------------------------- #
+def _parse(url):
+    if "://" not in url:
+        url = "https://" + url
+    return urlparse(url.strip())
+
+
+def parse_youtube_url(url):
+    """Return (video_id, playlist_id) from a YouTube URL; either may be None.
+
+    Handles youtube.com, www./m./music.youtube.com, youtu.be and /shorts/ links, e.g.
+    ``watch?v=abc&list=PLx`` -> ("abc", "PLx"), ``playlist?list=PLx`` -> (None, "PLx").
+    """
+    parsed = _parse(url)
+    host = (parsed.hostname or "").lower()
+    query = parse_qs(parsed.query)
+    path_parts = [p for p in parsed.path.split("/") if p]
+
+    video_id = query.get("v", [None])[0]
+    if host == "youtu.be" and path_parts:
+        video_id = path_parts[0]
+    elif len(path_parts) >= 2 and path_parts[0] in ("shorts", "live", "embed"):
+        video_id = path_parts[1]
+    playlist_id = query.get("list", [None])[0]
+
+    def clean(value):
+        return value if value and _YOUTUBE_ID_RE.fullmatch(value) else None
+
+    return clean(video_id), clean(playlist_id)
+
+
+def is_valid_youtube_url(url):
+    """Quick offline check: a YouTube (or YouTube Music) URL with a video or playlist in it."""
+    host = (_parse(url).hostname or "").lower()
+    return host in _YOUTUBE_HOSTS and any(parse_youtube_url(url))
+
+
+def _extract_info(url, single=False):
+    """Fetch metadata for a URL without downloading anything."""
+    options = {"quiet": True, "extract_flat": "in_playlist", "skip_download": True,
+               "noplaylist": single}
+    with YoutubeDL(options) as ydl:
+        return ydl.extract_info(url, download=False)
+
+
+def validate_url_with_yt_dlp(url, single=False):
+    """Check with yt-dlp that the URL points to something downloadable."""
+    try:
+        info = _extract_info(url, single)
+        return info is not None and ("entries" in info or "url" in info or "formats" in info)
+    except Exception as e:
+        log(f"Error validating URL with yt-dlp: {e}")
+        return False
+
+
+def get_playlist_title(url):
+    """Return a filesystem-safe title for the playlist (or video)."""
+    try:
+        title = (_extract_info(url) or {}).get("title")
+    except Exception as e:
+        log(f"Error extracting playlist metadata: {e}")
+        title = None
+    title = _INVALID_PATH_CHARS_RE.sub("_", title or "").strip(" .")
+    return title or "Unknown Playlist"
+
+
+# --------------------------------------------------------------------------- #
+# Download
+# --------------------------------------------------------------------------- #
+def resolve_destination(folder):
+    """Return the absolute, normalised destination folder, creating it if needed.
+
+    The destination is deliberately chosen by the local user, so any folder is
+    allowed; it is resolved once here so every later path is built from it.
+    """
+    if not folder or not str(folder).strip():
+        raise ValueError("A destination folder is required.")
+    destination = os.path.realpath(os.path.expanduser(str(folder).strip()))
+    os.makedirs(destination, exist_ok=True)
+    return destination
+
+
+def safe_join(base, name):
+    """Join name onto base, refusing any result that escapes base (e.g. '..')."""
+    base = os.path.realpath(base)
+    path = os.path.realpath(os.path.join(base, name))
+    if os.path.commonpath([base, path]) != base or path == base:
+        raise ValueError(f"Refusing to use {name!r}: it resolves outside {base}")
+    return path
+
+
+def prepare_output_dir(destination_folder, playlist_url):
+    """Create (if needed) and return the folder the playlist is downloaded into.
+
+    destination_folder must already be resolved by resolve_destination().
+    """
+    playlist_directory = safe_join(destination_folder, get_playlist_title(playlist_url))
+    if os.path.isdir(playlist_directory):
+        log(f"Target directory: {playlist_directory}")
+    else:
+        os.makedirs(playlist_directory)
+        log(f"Created target directory: {playlist_directory}")
+    return playlist_directory
+
+
+def build_yt_dlp_command(format_choice, output_dir, media_url, ffmpeg_folder=None, single=False):
+    """Build the yt-dlp command line. yt-dlp handles the mp3/mp4 conversion via ffmpeg.
+
+    With single=True only the video is downloaded, even if the URL also points to a playlist.
+    """
+    command = [
+        sys.executable, "-m", "yt_dlp",
+        "--newline",
+        "--no-playlist" if single else "--yes-playlist",
+        "--output", os.path.join(output_dir, "%(title)s.%(ext)s"),
+    ]
+    if format_choice == "mp3":
+        command += ["--format", "bestaudio/best",
+                    "--extract-audio", "--audio-format", "mp3", "--audio-quality", "192K"]
+    else:
+        command += ["--format", "bestvideo+bestaudio/best", "--merge-output-format", "mp4"]
+    if ffmpeg_folder:
+        command += ["--ffmpeg-location", ffmpeg_folder]
+    # "--" ends option parsing, so the URL can never be read as a yt-dlp option
+    # (e.g. "--exec ..."), whatever the caller passes in.
+    command += ["--", media_url]
+    return command
+
+
+def yt_dlp_age_days(version=YT_DLP_VERSION, today=None):
+    """Age in days of a yt-dlp version like '2025.09.05', or None if it can't be parsed."""
+    try:
+        year, month, day = (int(part) for part in version.split(".")[:3])
+        return ((today or date.today()) - date(year, month, day)).days
+    except (ValueError, TypeError):
+        return None
+
+
+def failure_hints(output_lines, version=YT_DLP_VERSION, today=None):
+    """Return human-readable hints explaining a failed download, based on yt-dlp's output."""
+    hints = []
+    age = yt_dlp_age_days(version, today)
+    if age is not None and age > YT_DLP_MAX_AGE_DAYS:
+        hints.append(
+            f"Your yt-dlp ({version}) is {age} days old, and YouTube regularly breaks old versions. "
+            f"Update it with:\n    \"{sys.executable}\" -m pip install -U yt-dlp")
+    # yt-dlp warns about a missing JS runtime on every run, so only point at it
+    # when signature extraction (which needs that runtime) actually failed.
+    if any("Signature extraction failed" in line for line in output_lines):
+        hints.append("yt-dlp needs a JavaScript runtime for YouTube. Installing deno "
+                     "(https://deno.com, e.g. `winget install DenoLand.Deno`) usually fixes this.")
+    return hints
+
+
+def cleanup_dot_part(folder):
+    """Delete leftover .part files from an interrupted download."""
+    if not folder or not os.path.isdir(folder):
+        return
+    found = False
+    for root, _dirs, files in os.walk(folder):
+        for name in files:
+            if name.endswith(".part"):
+                found = True
+                file_path = os.path.join(root, name)
                 try:
-                    log_to_file(f"Converting {file_path} to {converted_file}...")
-                    
-                    # Prepare FFmpeg command
-                    command = [
-                        "ffmpeg", "-i", file_path, "-vn", "-ar", "44100",
-                        "-ac", "2", "-b:a", "192k", converted_file
-                    ]
-                    
-                    # Run FFmpeg command
-                    process = subprocess.run(command, capture_output=True, text=True)
-                    
-                    if process.returncode == 0:
-                        os.remove(file_path)  # Remove the original file
-                        log_to_file(f"Successfully converted {file_path} to {converted_file}.")
-                        print(f"Successfully converted {file_path} to {converted_file}.")
-                    else:
-                        log_to_file(f"FFmpeg error for {file_path}: {process.stderr}")
-                        print(f"FFmpeg error for {file_path}: {process.stderr}")
-                
+                    os.remove(file_path)
+                    log(f"Deleted temporary file: {file_path}")
                 except Exception as e:
-                    log_to_file(f"Conversion failed for {file_path}: {str(e)}")
-                    print(f"Conversion failed for {file_path}: {str(e)}")
+                    log(f"Failed to delete {file_path}: {e}")
+    if not found:
+        log(f"No .part files found in {folder}, nothing to clean up.")
 
-    if not files_processed:
-        log_to_file("No supported files found for postprocessing.")
-        print("No supported files found for postprocessing.")
-    else:
-        log_to_file("Postprocessing completed.")
-        print("Postprocessing completed.")
+
+def resolve_single_mode(media_url, single):
+    """Decide whether to download a single title, given the URL and the requested mode.
+
+    Raises ValueError when a single title is requested but the URL has no video in it.
+    """
+    video_id, playlist_id = parse_youtube_url(media_url)
+    if single and not video_id:
+        raise ValueError("Single title mode needs a video URL (watch?v=... or youtu.be/...), "
+                         "not a playlist-only URL.")
+    if not single and not playlist_id:
+        log("The URL has no playlist in it, downloading it as a single title.")
+        return True
+    return single
+
+
+def download_playlist(format_choice, destination_folder, media_url, ffmpeg_folder=None, single=False):
+    """Download a playlist, or a single title with single=True, as mp3 or mp4.
+
+    Playlists go into a sub-folder named after the playlist; single titles go
+    straight into destination_folder. Returns True on success, False otherwise.
+    """
+    if format_choice not in SUPPORTED_FORMATS:
+        raise ValueError(f"Unsupported format {format_choice!r}, expected one of {SUPPORTED_FORMATS}")
+    # Validate here too, not only in the front-ends: only YouTube URLs ever reach yt-dlp.
+    media_url = (media_url or "").strip()
+    if not is_valid_youtube_url(media_url):
+        raise ValueError(f"Not a YouTube video or playlist URL: {media_url!r}")
+
+    cleanup_log_file()
+    log("Starting the download process...\n"
+        f"    Mode: {'single title' if single else 'playlist'}\n"
+        f"    Chosen format: {format_choice}\n"
+        f"    Destination folder: {destination_folder}\n"
+        f"    URL: {media_url}")
+
+    playlist_directory = None
+    success = False
+    try:
+        destination_folder = resolve_destination(destination_folder)
+        single = resolve_single_mode(media_url, single)
+        if single:
+            output_dir = destination_folder
+        else:
+            output_dir = playlist_directory = prepare_output_dir(destination_folder, media_url)
+        command = build_yt_dlp_command(format_choice, output_dir, media_url, ffmpeg_folder, single)
+        log(f"Running yt-dlp command: {subprocess.list2cmdline(command)}")
+
+        env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
+        output_lines = []
+        with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                              text=True, encoding="utf-8", errors="replace", env=env) as process:
+            for line in process.stdout:
+                line = line.rstrip()
+                if line:
+                    log(line)
+                    output_lines.append(line)
+
+        success = process.returncode == 0
+        if success:
+            log(f"Successfully downloaded: {media_url}")
+        else:
+            log(f"yt-dlp exited with code {process.returncode}, see the output above.")
+            for hint in failure_hints(output_lines):
+                log(f"Hint: {hint}")
+    except Exception as e:
+        log(f"Download failed: {e}")
+    finally:
+        # Only clean the playlist sub-folder: in single mode we never touch the
+        # rest of the user's destination folder.
+        cleanup_dot_part(playlist_directory)
+        # Don't leave an empty folder behind if nothing was downloaded.
+        if playlist_directory and os.path.isdir(playlist_directory) and not os.listdir(playlist_directory):
+            os.rmdir(playlist_directory)
+        log("\nTask Completed !")
+    return success
