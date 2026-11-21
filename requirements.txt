@@ -1,5 +1,2 @@
 yt-dlp
-pytube
-regex
 streamlit
-tk

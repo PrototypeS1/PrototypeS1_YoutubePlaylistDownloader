@@ -1,8 +1,12 @@
+# Editors / IDEs
 .vscode
+vscode
+.idea
+
+# Python
 .venv
 venv
-vscode
 __pycache__
+
+# Runtime log written by the app
 shared_log.txt
-.github
-.devcontainer
